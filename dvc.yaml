@@ -43,9 +43,11 @@ stages:
       - train.dropout_rate
       - train.epochs
       - train.batch_size
+      - train.random_seed
     outs:
       - models/model.keras
       - artifacts/[target]_one_hot_encoder.joblib
+      - metrics/mlflow_run.json
     metrics:
       - metrics/training.json
 
@@ -56,5 +58,6 @@ stages:
       - models/model.keras
       - artifacts/[target]_one_hot_encoder.joblib
       - data/processed/test_processed.csv
+      - metrics/mlflow_run.json
     metrics:
       - metrics/evaluation.json

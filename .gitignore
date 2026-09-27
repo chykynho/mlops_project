@@ -25,3 +25,6 @@ __pycache__/
 artifacts/*.joblib
 models/*.keras
 metrics/*.json
+
+# MLflow
+mlruns/

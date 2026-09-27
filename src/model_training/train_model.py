@@ -3,8 +3,10 @@ import logging
 import os
 
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
+from sklearn import metrics
 import tensorflow as tf
 import yaml
 from sklearn.preprocessing import OneHotEncoder
@@ -130,42 +132,69 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
         train_data (pd.DataFrame): Training dataset.
         params (dict[str, int | float]): Model hyperparameters.
     """
-    tf.keras.utils.set_random_seed(params.pop("random_seed"))
-    
-    # Prepare the data
-    X_train, y_train, encoder = prepare_data(train_data)
-    
-    # Create the model
-    model = create_model(
-        input_shape=X_train.shape[1], num_classes=y_train.shape[1], params=params
-    )
 
-    # Early stopping to prevent overfitting
-    early_stopping = EarlyStopping(
-        monitor="val_loss", patience=10, restore_best_weights=True
-    )
+    # Setup mlflow experiment
+    mlflow.set_experiment("ml_classification")
 
-    # Train the model with validation split
-    logger.info("Training model...")
-    history = model.fit(
-        X_train,
-        y_train,
-        validation_split=0.2,
-        epochs=params["epochs"],
-        batch_size=params["batch_size"],
-        callbacks=[early_stopping],
-    )
+    # Setup keras auto-logging with mlflow
+    mlflow.keras.autolog()
 
-    save_training_artifacts(model, encoder)
+    # Context manager
+    #with mlflow.start_run():
+    with mlflow.start_run() as run:
+        os.makedirs("metrics", exist_ok=True)
+        with open("metrics/mlflow_run.json", "w") as f:
+            json.dump({"run_id": run.info.run_id}, f, indent=2)
+        # Log parametres to mlflow
+        mlflow.log_params(params)
     
-    # Save training metrics to a file
-    metrics = {
-        metric: float(history.history[metric][-1]) 
-        for metric in history.history
-    }
-    metrics_path = "metrics/training.json"
-    with open(metrics_path, "w") as f:
-        json.dump(metrics, f, indent=2)
+        #tf.keras.utils.set_random_seed(params.pop("random_seed"))
+        tf.keras.utils.set_random_seed(params["random_seed"])
+
+        # Log preprocessing artifacts to mlflow
+        mlflow.log_artifact("artifacts/[features]_mean_imputer.joblib")
+        mlflow.log_artifact("artifacts/[features]_scaler.joblib")
+        
+        # Prepare the data
+        X_train, y_train, encoder = prepare_data(train_data)
+        
+        # Create the model
+        model = create_model(
+            input_shape=X_train.shape[1], num_classes=y_train.shape[1], params=params
+        )
+
+        # Early stopping to prevent overfitting
+        early_stopping = EarlyStopping(
+            monitor="val_loss", patience=10, restore_best_weights=True
+        )
+
+        # Train the model with validation split
+        logger.info("Training model...")
+        history = model.fit(
+            X_train,
+            y_train,
+            validation_split=0.2,
+            epochs=params["epochs"],
+            batch_size=params["batch_size"],
+            callbacks=[early_stopping],
+        )
+
+        save_training_artifacts(model, encoder)
+
+        # Log the encoder
+        mlflow.log_artifact("artifacts/[target]_one_hot_encoder.joblib")
+        
+        # Save training metrics to a file
+        metrics = {
+            metric: float(history.history[metric][-1]) 
+            for metric in history.history
+        }
+        metrics_path = "metrics/training.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=2)
+
+        # Log metrics to MLflow
+        # mlflow.log_metrics(metrics)
 
 
 def main() -> None:
