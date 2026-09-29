@@ -4,9 +4,11 @@ import os
 
 import joblib
 import pandas as pd
+from mlflow.tracking import MlflowClient
 from flask import Flask, render_template, request
 from sklearn.datasets import load_breast_cancer
 from tensorflow.keras.models import load_model
+import mlflow
 
 logger = logging.getLogger("app.main")
 
@@ -19,26 +21,47 @@ class ModelService:
         """Load all artifacts from the local project folder."""
         logger.info("Loading artifacts from local project folder")
 
-        # Define base paths
-        artifacts_dir = "artifacts"
-        models_dir = "models"
+       # Load model from registry
+        logger.info("Loading registered model from MLflow Model Registry")
+        # ------ Alterado pelo chatGPT --------
+        #self.model = mlflow.keras.load_model("models:/model/latest")
+        # ------ Get run_id from model version metadata -----
+        #client = MlflowClient()
+        #run_id = client.get_registered_model("model").latest_versions[0].run_id
+        # ------- Alterado pelo chatGPT --------
 
-        # Define paths to the preprocessing artifacts
-        features_imputer_path = os.path.join(
-            artifacts_dir, "[features]_mean_imputer.joblib"
-        )
-        features_scaler_path = os.path.join(artifacts_dir, "[features]_scaler.joblib")
-        target_encoder_path = os.path.join(
-            artifacts_dir, "[target]_one_hot_encoder.joblib"
-        )
-        # Define path to the model file
-        model_path = os.path.join(models_dir, "model.keras")
+        client = MlflowClient()
+        versions = client.search_model_versions("name = 'model'")
 
-        # Load all required artifacts
-        self.features_imputer = joblib.load(features_imputer_path)
-        self.features_scaler = joblib.load(features_scaler_path)
-        self.target_encoder = joblib.load(target_encoder_path)
-        self.model = load_model(model_path)
+        if not versions:
+            raise RuntimeError("Nenhuma versão do modelo 'model' foi registrada.")
+
+        version = max(versions, key=lambda item: int(item.version))
+        run_id = version.run_id
+
+        self.model = mlflow.keras.load_model(
+            f"models:/model/{version.version}"
+        )
+
+        logger.info(
+            "Modelo carregado: versão=%s, run_id=%s",
+            version.version,
+            run_id,
+        )
+
+        # Load related artifacts
+        logger.info(f"Loading artifacts from run {run_id}")
+        artifacts_dir = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="")
+
+        imputer_path = os.path.join(artifacts_dir, "[features]_mean_imputer.joblib")
+        self.features_imputer = joblib.load(imputer_path)
+        scaler_path = os.path.join(artifacts_dir, "[features]_scaler.joblib")
+        self.features_scaler = joblib.load(scaler_path)
+        encoder_path = os.path.join(artifacts_dir, "[target]_one_hot_encoder.joblib")
+        self.target_encoder = joblib.load(encoder_path)
+
+        logger.info("Successfully loaded model and related artifacts")
+
 
         logger.info("Successfully loaded all artifacts")
 

@@ -139,25 +139,40 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
     # Setup keras auto-logging with mlflow
     mlflow.keras.autolog()
 
+    '''
     # Context manager
     #with mlflow.start_run():
     with mlflow.start_run() as run:
         os.makedirs("metrics", exist_ok=True)
         with open("metrics/mlflow_run.json", "w") as f:
             json.dump({"run_id": run.info.run_id}, f, indent=2)
+    '''
+
+    # Usa o nome do experimento DVC quando ele estiver disponível
+    dvc_exp_name = os.getenv("DVC_EXP_NAME")
+    run_name = dvc_exp_name or "treinamento"
+
+    with mlflow.start_run(run_name=run_name) as run:
+        if dvc_exp_name:
+            mlflow.set_tag("dvc_exp_name", dvc_exp_name)
+
+        os.makedirs("metrics", exist_ok=True)
+        with open("metrics/mlflow_run.json", "w") as f:
+            json.dump({"run_id": run.info.run_id}, f, indent=2)
+
         # Log parametres to mlflow
         mlflow.log_params(params)
-    
+
         #tf.keras.utils.set_random_seed(params.pop("random_seed"))
         tf.keras.utils.set_random_seed(params["random_seed"])
 
         # Log preprocessing artifacts to mlflow
         mlflow.log_artifact("artifacts/[features]_mean_imputer.joblib")
         mlflow.log_artifact("artifacts/[features]_scaler.joblib")
-        
+
         # Prepare the data
         X_train, y_train, encoder = prepare_data(train_data)
-        
+
         # Create the model
         model = create_model(
             input_shape=X_train.shape[1], num_classes=y_train.shape[1], params=params
@@ -183,10 +198,10 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
 
         # Log the encoder
         mlflow.log_artifact("artifacts/[target]_one_hot_encoder.joblib")
-        
+
         # Save training metrics to a file
         metrics = {
-            metric: float(history.history[metric][-1]) 
+            metric: float(history.history[metric][-1])
             for metric in history.history
         }
         metrics_path = "metrics/training.json"
