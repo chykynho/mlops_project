@@ -16,7 +16,7 @@ logger = logging.getLogger("app.main")
 class ModelService:
     def __init__(self) -> None:
         self._load_artifacts()
-
+    '''
     def _load_artifacts(self) -> None:
         """Load all artifacts from the local project folder."""
         logger.info("Loading artifacts from local project folder")
@@ -62,6 +62,32 @@ class ModelService:
 
         logger.info("Successfully loaded model and related artifacts")
 
+
+        logger.info("Successfully loaded all artifacts")
+    '''
+    def _load_artifacts(self) -> None:
+        """Carrega o modelo e os artefatos locais para inferência."""
+        logger.info("Loading artifacts from local project folder")
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        artifacts_dir = os.path.join(base_dir, "artifacts")
+        models_dir = os.path.join(base_dir, "models")
+
+        self.features_imputer = joblib.load(
+            os.path.join(artifacts_dir, "[features]_mean_imputer.joblib")
+        )
+
+        self.features_scaler = joblib.load(
+            os.path.join(artifacts_dir, "[features]_scaler.joblib")
+        )
+
+        self.target_encoder = joblib.load(
+            os.path.join(artifacts_dir, "[target]_one_hot_encoder.joblib")
+        )
+
+        self.model = load_model(
+            os.path.join(models_dir, "model.keras")
+        )
 
         logger.info("Successfully loaded all artifacts")
 
